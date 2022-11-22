@@ -1092,25 +1092,34 @@ app.post('/merma', jsonParser, (req, res) => {
     });
 });
 
-// 
+// Ruta para obtener el stock actual de cada producto
 app.get('/stock', (req, res) => {
     let db = getDBConnection();
+
+    // Funcion para obtener todos los productos
     getAllProducts(db, function(err, products){
         // console.log(products);
         if(err)
             res.json(returnError('Error'));
         
+        // Array para guardar el stock
         let stock = []
         let total_items = products.length;
         let counter = 0;
 
+        // Itera sobre todos los productos
         products.forEach( product => {
+            // Obtiene las compras totales de un producto
             getShoppingTotal(db, product.id, function(err_2, total_compras){
+                // Obtiene el total de las notas de un producto
                 getOrderTotal(db, product.id, function(err_2, total_pedidos){
+                    // Obtiene la merma total de un producto
                     getMermaTotal(db, product.id, function(err_3, total_merma){
+                        // Agrega el stock total de un producto a un array
                         stock.push({id: product.id, venta_por: product.venta_por, nombre: product.name, total_compras, total_pedidos, total_merma});
                         // console.log(stock);
                         counter++;
+                        // Si el contador es mayor o igual al numero de productos enviamos la respuesta
                         if(counter >= total_items)
                             endResponse();
                     });
@@ -1124,18 +1133,24 @@ app.get('/stock', (req, res) => {
     });
 });
 
+// Ruta para obtener el valor actual de la bascula
 app.get('/bascula', (req, res) => {
     console.log('bascula');
     res.json({kg_bascula: current_kg});
 });
 
 
+// Ruta para imprimir tickets envia el valor del body
+// a la funcion generateTicket
 app.post('/imprimir-ticket', jsonParser ,(req, res) => {
     generateTicket(req.body);
     res.json({ok: true});
 });
 
+// Funcion que imprime un ticket de prueba utilizando exec
+// que ejecuta comandos en la terminal
 function printTicketPrueba(){
+    // Funcion exec que ejecuta la impresion del documento de prueba
     exec('PDFtoPrinter-OldVersion.exe ticket_prueba.pdf', (error, stdout, stderr) => {
         if (error) {
             console.log(`error: ${error.message}`);
@@ -1150,11 +1165,13 @@ function printTicketPrueba(){
     });
 }
 
+// Funcion para redondear numeros
 function roundNumber(num){
     return Math.round((num + Number.EPSILON) * 100) / 100
 }
 
-
+// Funcion que devuelve la fecha con las horas y minutos
+// actuales
 function getFullDateTime(){
     let date_ob = new Date();
     // current date
@@ -1179,19 +1196,30 @@ function getFullDateTime(){
     return year + "-" + month + "-" + date + " " + hours + ":" + minutes; //+ ":" + seconds;
 }
 
+// Funcion que genera ticket apartir del parametro order
+// el cual contiene toda la informacion para la impresion
+// del ticket
 function generateTicket(order){
     console.log('Generando ticket');
+
+    // Nombre del negocio
     let nombre_negocio = 'Aguacates y papayas cynthia';
+    // Obtiene la hora y fecha actual
     let dt = getFullDateTime();
 
+    // Genera el total a pagar en cada producto
     function getTotal(products){
         let total = 0;
         products.forEach( product => total += (product.precio_kg * product.cantidad_kg) );
         return total;
     }
-    
+
+    // Redondea numero y convierta a string el total
     const total = String(roundNumber(getTotal(order.productos)));
+    // Variable para guardar el cambio
     let cambio = String(roundNumber(order.efectivo - total));
+
+    // Establece los valores de efectivo y cambio si es que existe un valor
     let efectivo = 0;
     if(order.efectivo){
         efectivo = order.efectivo;
@@ -1201,59 +1229,68 @@ function generateTicket(order){
         cambio = 0;
     
     let paper_height = order.productos.length * 4;
+    // Crea un objeto jsPDF para generar el ticket (pdf)
     const doc = new jsPDF.jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: [50, (290 - paper_height) + paper_height]
     });
     
+    // Varuable para cambiar el valor de y en el pdf
     let current_y = 0;
     
+    // Cambia el tamaño de la tipografia
     doc.setFontSize(8);
     
+    // Escribe el nombre del negocio y fecha-hora en el pdf
     doc.text(nombre_negocio, 6, 2);
     doc.text(dt, 13, 6);
     
+    // Escribe la fecha de la nota en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Fecha de compra:', 1, 14);
     doc.setFont("helvetica", "bold");
     doc.text(order.fecha, 24, 14);
     
     current_y = 18;
-    // 1 current_y - 10 current_y
+
+    // Escribe el id de la nota en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('ID nota:', 1, current_y);
     doc.setFont("helvetica", "bold");
     doc.text(String(order.id_pedido), 15, current_y);
     
-    // 28 current_y - 38 current_y 18
+    // Escribe el id de la nota en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Cajero:', 28, current_y);
     doc.setFont("helvetica", "bold");
     doc.text(String(order.cajero), 38, current_y);
     
     current_y = 22;
-    // 1 current_y - 11 current_y 22
+
+    // Escribe el chalan en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Chalan:', 1, current_y);
     doc.setFont("helvetica", "bold");
     doc.text(String(order.chalan), 15, current_y);
     
 
-    // 28 current_y - 39 current_y
+    // Escribe el cliente en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Cliente:', 28, current_y);
     doc.setFont("helvetica", "bold");
     doc.text(String(order.cliente), 38, current_y);
     
     current_y = 26;
-    // 1 current_y - 10 current_y
+
+    // Escribe la deuda actual en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Deuda actual:', 1, current_y);
     doc.setFont("helvetica", "bold");
     doc.text("$"+String(order.adeudo), 19, current_y);
     
 
+    // Obtiene el texto del estado de la nota
     let en = '';
     if(order.estado_nota === 'Pagado'){
         en = 'Pagada';
@@ -1267,6 +1304,7 @@ function generateTicket(order){
         en = 'Fiada';
     }
 
+    // Escribe el estado de la nota en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Nota:', 31, current_y);
     doc.setFont("helvetica", "bold");
@@ -1274,6 +1312,7 @@ function generateTicket(order){
     
     current_y = 32;
     
+    // Escribe los encabezados de la tabla de los productos en el pdf
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6);
     doc.text('Cantidad', 1, current_y);
@@ -1283,6 +1322,8 @@ function generateTicket(order){
     
     current_y = 32;
     doc.setFont("helvetica", "normal");
+
+    // Escribe cada producto econ descripcion precio e importe n el PDF
     order.productos.forEach( function(producto) {
         current_y += 4;
         doc.text(''+ String(producto.cantidad_kg), 1, current_y);
@@ -1294,12 +1335,14 @@ function generateTicket(order){
     
     current_y += 4;
     
+    // Escribe un separador en el pdf
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.text('--------------------------------------------------', 1, current_y);
     
     current_y += 4;
     
+    // Escribe el total en el PDF
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.text('Total:', 1, current_y);
@@ -1308,6 +1351,7 @@ function generateTicket(order){
     
     current_y += 3;
     
+    // Escribe el chalan en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Efectivo:', 1, current_y);
     doc.setFont("helvetica", "bold");
@@ -1315,6 +1359,7 @@ function generateTicket(order){
     
     current_y += 3;
     
+    // Escribe el cambio en el pdf
     doc.setFont("helvetica", "normal");
     doc.text('Cambio:', 1, current_y);
     doc.setFont("helvetica", "bold");
@@ -1322,13 +1367,16 @@ function generateTicket(order){
     
     current_y += 4;
     
+    // Escribe el mensaje de agradecimiento en el pdf
     doc.setFont("helvetica", "bold");
     doc.text('Gracias por su compra', 8, current_y);
     
+    // Guarda el ticket
     doc.save("ticket.pdf");
     console.log('Ticket nuevo generado!');
     
 
+    // Ejecuta comando para imprimir el ticket generado
     exec('PDFtoPrinter-OldVersion.exe ticket.pdf', (error, stdout, stderr) => {
         if (error) {
             console.log(`error: ${error.message}`);
@@ -1341,7 +1389,8 @@ function generateTicket(order){
         console.log(`stdout: ${stdout}`);
     });
 }
-// Stock functions
+
+// Funcion para obtener todos los productos
 function getAllProducts(db, callback){
     db.all('SELECT * FROM Productos', [], (err, rows) => {
         if(err){
@@ -1354,6 +1403,7 @@ function getAllProducts(db, callback){
     });
 }
 
+// Funcion para obtner el total de las compras de un producto
 function getShoppingTotal(db, product_id, callback){
         db.all('SELECT sum(kg) as total_compras FROM Compras WHERE id_producto = ?;', [product_id], (err, rows) => {
         if(err){
@@ -1367,6 +1417,7 @@ function getShoppingTotal(db, product_id, callback){
     });
 }
 
+// Funcion para obtener el total de los pedidos de un producto
 function getOrderTotal(db, product_id, callback){
     db.all('SELECT sum(cantidad_kg) as total_pedidos FROM Pedidos_detalle WHERE id_producto = ?;', [product_id], (err, rows) => {
         if(err){
@@ -1380,6 +1431,7 @@ function getOrderTotal(db, product_id, callback){
     });
 }
 
+// Funcion para obtener la merma total de un producto
 function getMermaTotal(db, product_id, callback){
     db.all('SELECT sum(cantidad_merma) as total_merma FROM Merma WHERE id_producto = ?;', [product_id], (err, rows) => {
         if(err){
@@ -1393,12 +1445,23 @@ function getMermaTotal(db, product_id, callback){
     });
 }
 
+
+// Funcion para escuchar en un puerto especifico las peticiones
 app.listen(port, () => {
     console.log(`Listening on port ${port}`);
+
+    // Timeout para revisar si existe comunicacion
+    // y si existe realizar lo siguiente:
+    // - Ejecutar serve para generar acceso a frontend
+    // - Llamar funcion para imprimir ticket de prueba
+    // - Ejecutar timeout para abrir la pagina del sistema en chrome
+    
     setTimeout( () => {
     if(data_available){
         // Inicia servidor
         console.log("Iniciando servidor");
+
+        // Ejecuta serve para crear un servidor de archivos estaticos para el front
         exec('serve -s '+ frontendPath + " -p 3000", (error, stdout, stderr) => {
             console.log('Servidor iniciado');
             if (error) {
@@ -1412,8 +1475,10 @@ app.listen(port, () => {
             // console.log(`stdout: ${stdout}`);
         });
 
+        // Imprime ticket de prueba
         printTicketPrueba();
 
+        // Crea timeout para abrir pagina principal en chrome
         setTimeout(function(){
             exec('start chrome http://localhost:3000', (error, stdout, stderr) => {
             console.log('Pagina principal abierta');
@@ -1429,6 +1494,8 @@ app.listen(port, () => {
             });
         }, process.env.MS_FRONTEND * 1000);
     }
+
+    // Si no existe comunicacion se muestra mensaje en consola
 
     else{
         console.log('Error de lectura de bascula. Por favor cerrar programa, volver a conectar bascula y ejecutar el programa');
