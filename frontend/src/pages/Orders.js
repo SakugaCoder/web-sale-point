@@ -170,7 +170,7 @@ export default function Pedidos(){
     const [orders, setOrders] = useState(null);
     const [chalanes, setChalanes] = useState(null);
     const [clients, setClients] = useState(null);
-    const [filters, setFilters] = useState({fecha: null, cliente: null, chalan: null, estado: null});
+    const [filters, setFilters] = useState({fecha: null, cliente: null, chalan: '', estado: null});
     const { modalState, setModalState, handleModalClose } = useModal();
     const { modalState: paymentModalState, setModalState: setPaymentModalState, handleModalClose: handlePaymentModalClose } = useModal();
     const [ currentNumber, setCurrentNumber ] = useState('');
@@ -207,10 +207,12 @@ export default function Pedidos(){
     };
 
     const payOrder = async order => {
+        let items = await getOrderDetail(order.id);
         let data = {
             total: order.total_pagar,
             order_id: order.id,
-            cajero: localStorage.getItem('username')
+            cajero: localStorage.getItem('sp_user_id'),
+            items
         };
 
         console.log(data);
@@ -252,7 +254,7 @@ export default function Pedidos(){
         }
 
         else{
-            console.log('Fiado')
+            console.log('Fiado');
             if(currentNumber){
                 if(Number(currentNumber) >= Number(evt.target.total_pagar.value)){
                     payOrder({total_pagar: evt.target.total_pagar.value, id: evt.target.order_id.value});
@@ -267,10 +269,13 @@ export default function Pedidos(){
     };
 
     const fiarOrder = async (evt, order_detail) => {
+        console.log(order_detail);
         evt.preventDefault();
+        
         let order = {
             order_id: order_detail.id,
-            cajero: localStorage.getItem('username')
+            cajero: localStorage.getItem('username'),
+            adeudo: order_detail.total_pagar
         }
 
         let res = await SP_API('http://localhost:3002/fiar-pedido', 'POST', order); 
@@ -323,6 +328,9 @@ export default function Pedidos(){
             efectivo: null,
             productos: ticket_order.detalle
         };
+
+        console.log(final_ticket_data);
+        
 
     
         let res = await SP_API('http://localhost:3002/imprimir-ticket', 'POST', final_ticket_data);
@@ -446,6 +454,30 @@ export default function Pedidos(){
         });
     }
 
+    async function pagarPCEChalan(){
+
+        let data = {
+            chalan: filters.chalan,
+            cajero: localStorage.getItem('username')
+        };
+
+        console.log(data);
+
+        try {
+            let res = await SP_API('http://localhost:3002/pagar-pce-chalan', 'POST', data); 
+                    
+            if(res.error === false){
+                initialFunction();
+            }
+
+            else{
+                alert('Error al pagar PCE chalan');
+            }   
+        } catch (error) {
+            console.log(error);
+        }
+    }
+
     return(
         <Layout active='Notas'>
             <Container>
@@ -453,6 +485,8 @@ export default function Pedidos(){
                     <h2>LISTA DE NOTAS</h2>
                     <Button className='bg-red' onClick={ () => window.location.reload() }>REINICIAR FILTROS</Button>
                 </div>
+                { filters ? (filters.chalan.length > 1 && filters.estado == 4 ? <Button className="bg-light-blue" onClick={ pagarPCEChalan}>RECIBIR PAGO TOTAL DE CHALAN</Button>: null) : null}
+
                 <div style={ { overflowX: 'auto', marginTop: 20}}>
                     { clientDebt  || clientDebt >= 0? <p style={ {fontSize: 24, marginTop: 0} }>Deuda total de { filters.cliente.split(',')[1]}  = <strong>${ roundNumber(clientDebt) }</strong></p>: null }
                     { filters.chalan !== '0' && filters.chalan ? <p style={ {fontSize: 20} }>Total PCE chalan <strong>{filters.chalan.split(',')[1]}</strong> = <strong>${ roundNumber((filterData().filter( item => item.estado === 4).map( item => item.total_pagar)).reduce( (anterior, actual) => anterior + actual, 0)) }</strong> </p> : null}

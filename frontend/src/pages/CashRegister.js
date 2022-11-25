@@ -542,7 +542,7 @@ export default function Suppliers(){
                                         sumatoria.sumatorias.filter( s => s.Sumatoria > 0).map( (item, index) => {
                                         return <tr key={index}>
                                             <td>{ item.nombre }</td>
-                                            <td>{ item.Sumatoria } { item.venta_por }</td>
+                                            <td>{ roundNumber(item.Sumatoria) } { item.venta_por }</td>
                                             <td>${ roundNumber(item.precio  * item.Sumatoria) }</td>
                                         </tr>
                                     })
@@ -582,7 +582,7 @@ export default function Suppliers(){
                                     detalleCaja.retiros.map( (item, index) => {
                                     return <tr key={index}>
                                         <td>{ item.fecha_retiro }</td>
-                                        <td>${ item.monto }</td>
+                                        <td>${ roundNumber(item.monto) }</td>
                                         <td>{ item.concepto }</td>
                                     </tr>
                                 })

@@ -21,7 +21,8 @@ const exec = child_process.exec;
 const { SerialPort } = require('serialport');
 const serial_port = new SerialPort({ path: 'COM' + process.env.COM_PORT, baudRate: 115200 });
 
-let current_kg = 1; // Kg que se envian al frontend
+let current_kg = 1;
+// let current_kg = 0; // Kg que se envian al frontend
 let data_available = false; // Variable para saber si hay disponible informacion
 
 // Middleware para acceder a la informacion enviada en las peticiones
@@ -47,7 +48,7 @@ app.use(express.static('uploads'));
 // Funcion para detectar error en puerto serie
 serial_port.on('error', function(err) {
     console.log('Error 2 de lectura de bascula. Por favor cerrar programa, volver a conectar bascula y ejecutar el programa');
-    current_kg = -100;
+    // current_kg = -100;
 });
 
 
@@ -57,22 +58,22 @@ setInterval( () => {
 }, 800);
 
 
-// Funcion de intervalo de 1s para detectar si se perdio comunicacion
-setInterval( () => {
-    // Revisa si la comunicacion no se ha perdido
-    if(!comunication_lost){
-        // Aumenta segundos sin comunicacion
-        seconds_without_data++;
-        console.log('Segundos sin comunicacion', seconds_without_data);
-        // Valida si los segundos transcuridos sin comunicacion 
-        // son mayores a una variable definda en el archivo .env
-        if(seconds_without_data >  process.env.MS_COMMUNICATION_ERROR){
-            console.log('Se perdio la comunicacion');   
-            comunication_lost = true;
-            current_kg = -100;
-        }
-    }
-}, 1000);
+// // Funcion de intervalo de 1s para detectar si se perdio comunicacion
+// setInterval( () => {
+//     // Revisa si la comunicacion no se ha perdido
+//     if(!comunication_lost){
+//         // Aumenta segundos sin comunicacion
+//         seconds_without_data++;
+//         console.log('Segundos sin comunicacion', seconds_without_data);
+//         // Valida si los segundos transcuridos sin comunicacion 
+//         // son mayores a una variable definda en el archivo .env
+//         if(seconds_without_data >  process.env.MS_COMMUNICATION_ERROR){
+//             console.log('Se perdio la comunicacion');   
+//             comunication_lost = true;
+//             current_kg = -100;
+//         }
+//     }
+// }, 1000);
 
 // Funcion que se ejecuta cuando hay datos en el puerto serie
 serial_port.on('data', function (data) {
@@ -751,8 +752,6 @@ app.post('/nuevo-pedido', jsonParser, async (req, res) => {
         db.close();
         res.json({err});
     });
-
-
 });
 
 // Ruta para pagar un pedido
@@ -760,6 +759,65 @@ app.post('/pagar-pedido', jsonParser, (req, res) => {
     console.log('pagando pedido');
     let query = `UPDATE Pedidos set estado = 1, enviado = 0, adeudo=0, abono=?, chalan="", fecha_pago=?, cajero=? WHERE id = ?`;
     let values = [req.body.total, getCurrentDatetime(), req.body.cajero, req.body.order_id];
+
+    let db = getDBConnection();
+    let error = false;
+
+    db.run(query, values, function(err) {
+        if (err) {
+            error = true;
+            console.log(err.message);
+            // return console.log(err.message);
+        }
+        else{
+            
+            // Selecciona los datos del pedido creado
+            db.all('SELECT * FROM Pedidos WHERE id = ?', [req.body.order_id], function(err, rows){
+                // if (err) {
+                //     err = true;
+                //     return console.log(err.message);
+                // }
+
+                // Llama a la funcion obtenerAdeudo para generar
+                // la informacion que se imprimira en el ticket
+                obtenerAdeudo(function(adeudo){
+                    let order_data = rows[0];
+                    let final_ticket_data = {
+                        id_pedido: order_data.id,
+                        fecha: order_data.fecha,
+                        cajero: req.body.cajero_id, //req.body.cajero,
+                        chalan: order_data.chalan ? order_data.chalan.split(',')[0] : 'NA',
+                        cliente: order_data.id_cliente,
+                        adeudo: adeudo,
+                        estado_nota: getOrderStatusText(order_data.estado), 
+                        efectivo: order_data.efectivo,
+                        productos: req.body.items.map( function(item){ 
+                            return {
+                                nombre_producto: item.nombre_producto,
+                                precio_kg: item.precio_kg,
+                                cantidad_kg: item.cantidad_kg
+                            }
+                        })
+                    }
+                    console.log('******************************** Data del ticket', final_ticket_data);
+
+                    // Imprime ticket
+                    generateTicket(final_ticket_data);
+            }, rows[0].id_cliente);
+            });
+        }
+
+        db.close();
+        res.json({error});
+    });
+    // close the database connection
+});
+
+// Ruta para pagar todo el pce de un chalan
+app.post('/pagar-pce-chalan', jsonParser, (req, res) => {  
+    console.log('pagando pedido');
+    let query = `UPDATE Pedidos set estado = 1, enviado = 0, adeudo=0, chalan="", fecha_pago=?, cajero=? WHERE chalan = ?`;
+    let values = [getCurrentDatetime(), req.body.cajero, req.body.chalan];
 
     let db = getDBConnection();
     let error = false;
@@ -802,8 +860,8 @@ app.post('/pce-pedido', jsonParser, (req, res) => {
 // Ruta para establecer como fiado un pedido
 app.post('/fiar-pedido', jsonParser, (req, res) => { 
     console.log('pagando pedido');
-    let query = `UPDATE Pedidos set estado = 2, enviado = 0, chalan="", cajero=?, abono=0 WHERE id = ?`;
-    let values = [req.body.cajero, req.body.order_id];
+    let query = `UPDATE Pedidos set estado = 2, enviado = 0, chalan="", cajero=?, abono=0, adeudo=? WHERE id = ?`;
+    let values = [req.body.cajero, req.body.adeudo, req.body.order_id];
 
     let db = getDBConnection();
     let error = false;

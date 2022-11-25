@@ -22,14 +22,14 @@ const ProductCardImage = styled.img`
 
 const ProductCardPrice = styled.div`
     font-weight: 600;
-    font-size: 16px;
+    font-size: 22px;
     text-align: center;
     margin-top: 5px;
 `;
 
 const ProductCardName = styled.div`
     font-weight: 800;
-    font-size: 16px;
+    font-size: 20px;
     text-align: center;
     margin-top: 5px;
 `;

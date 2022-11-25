@@ -195,7 +195,7 @@ export default function Inventory(){
                     <input type='hidden' name='product_id' defaultValue={ currentItem ? currentItem.id : null } required/>
                     <PaymentAmount>Stock actual: {Math.round(((currentItem.total_compras ? currentItem.total_compras : 0) - (currentItem.total_pedidos ? currentItem.total_pedidos: 0) - (currentItem.total_merma ? currentItem.total_merma: 0)) *100 )/100 } { currentItem ? currentItem.venta_por : null}</PaymentAmount>
 
-                    <PaymentAmount>Merma: { currentNumber ? currentNumber : '0'} Kg</PaymentAmount>
+                    <PaymentAmount>Merma: { currentNumber ? currentNumber : '0'} { currentItem ? currentItem.venta_por : null}</PaymentAmount>
                     <input type='hidden' value={currentNumber ? currentNumber : '0'} name='merma'/>
                     <Keypad currentNumber={currentNumber} setCurrentNumber={setCurrentNumber} />
 
