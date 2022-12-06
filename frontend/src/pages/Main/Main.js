@@ -13,6 +13,7 @@ import useModal from "../../hooks/useModal";
 import Keypad from "../../components/Keypad";
 import { getItems, insertItem, SP_API } from "../../utils/SP_APPI";
 import { getTotal, roundNumber } from "../../utils/Operations";
+import './Main.css';
 
 const MainContainer = styled.div`
     margin: 20px 20px 5px 10px;
@@ -257,6 +258,19 @@ export default function Main(){
     const [ paymentError, setPaymentError ]  = useState('');
     const [ errorBascula, setErrorBascula ] = useState(null);
     const [ errorMsj, setErrorMsj ] = useState('');
+    const [ inputs, setInputs ] = useState({
+        pza:{
+            cantidad: useRef(null),
+            precio: useRef(null)
+        },
+        kg:{
+            precio: 0,
+            tara: 0,
+        }
+    });
+
+    const [ currentInput, setCurrentInput ] = useState('');
+
     let counter = 0;
 
     const selectClientRef = useRef(null);
@@ -424,6 +438,7 @@ export default function Main(){
 
                 else{
                     setPaymentError('La cantidad ingresada para el pago no es valida. Favor de verificar.');
+                    setCurrentNumber('');
                     console.log('Ingresa una cantidad correcta');
                 }
             }
@@ -538,19 +553,20 @@ export default function Main(){
         setCurrentProduct(product_data);
         if(currentClient){
             console.log(product_data);
-            if(product_data.venta_por === 'kg'){
-                console.log(currentKg);
-                if((Number(currentKg)).toFixed(2) <= 0){
-                    return null;
-                }
-                else{
-                    addProductToBasketHidden(product_data);
-                }
-            }
+            // if(product_data.venta_por === 'kg'){
+            //     console.log(currentKg);
+            //     if((Number(currentKg)).toFixed(2) <= 0){
+            //         return null;
+            //     }
+            //     else{
+            //         addProductToBasketHidden(product_data);
+            //     }
+            // }
 
-            else if(product_data.venta_por === 'pza'){
-                setProductModalState({visible: true});
-            }
+            // else if(product_data.venta_por === 'pza'){
+            //     setProductModalState({visible: true});
+            // }
+            setProductModalState({visible: true});
         }
 
         else{
@@ -628,6 +644,12 @@ export default function Main(){
         </form>
     </div>
     };
+
+    const addValueToInput = val => {
+        setInputs(
+            ...inputs,
+        )
+    }
     
     useEffect( () => {
         getProducts();
@@ -712,7 +734,7 @@ export default function Main(){
                         { chalanesSelect }
                     </ContraEntrega>
 
-                    <Keypad currentNumber={currentNumber} setCurrentNumber= { (val) => {setCurrentNumber(val); setPaymentError('') }} />
+                    <Keypad currentNumber={currentNumber} setCurrentNumber= { (val) => {setCurrentNumber(val); addValueToInput(val); setPaymentError('') }} />
                     
                     <ModalButtons>
                         <Button type="submit" className="bg-primary">Pagar</Button>
@@ -728,7 +750,7 @@ export default function Main(){
                         <img src={currentProduct.img }/>
 
                         <p style={ {fontSize: 26} }>{ currentProduct.name }</p>
-                        <strong style={ {fontSize: 36} }>$ { currentProduct.price } x pza</strong>
+                        {/* <strong style={ {fontSize: 36} }>$ { currentProduct.price } x  1 {currentProduct.venta_por}</strong> */}
 
                         <p style={ {fontSize: 26, color: 'red'} }>{ errorMsj }</p>
 
@@ -739,10 +761,47 @@ export default function Main(){
                                 <PaymentAmount>En bascula: { currentKg } kg</PaymentAmount>
                                 <PaymentAmount>Peso total: { finalKg } kg</PaymentAmount>
                             */}
-
+{/* 
                             <PaymentAmount style={ {marginTop:5, marginBottom: 5}}>Total: ${ currentNumber ? currentNumber*currentProduct.price : '0'}</PaymentAmount>
-                            <PaymentAmount style={ {marginTop:5}}>Piezas: { currentNumber ? currentNumber : '0'}</PaymentAmount>
+                            <PaymentAmount style={ {marginTop:5}}>Piezas: { currentNumber ? currentNumber : '0'}</PaymentAmount> */}
+                            {
+                                currentProduct.venta_por === 'kg'
+                                ?
+                                    <table className="product-info">
+                                        <tbody>
+                                            <tr>
+                                                <td><h3>Precio x {currentProduct.venta_por}</h3></td>
+                                                <td><input type='text' placeholder={currentProduct.price}></input></td>
+                                            </tr>
+
+                                            <tr>
+                                                <td><h3>Precio bruto</h3></td>
+                                                <td><input type='text' placeholder={currentProduct.price}></input></td>
+                                            </tr>
+
+                                            <tr>
+                                                <td><h3>Tara</h3></td>
+                                                <td><input type='text' placeholder={currentProduct.price}></input></td>
+                                            </tr>
+
+                                            <tr>
+                                                <td><h3>Peso neto</h3></td>
+                                                <td><p>2.3 kg</p></td>
+                                            </tr>
+
+                                            <tr>
+                                                <td><h3>Total</h3></td>
+                                                <td><p>2.3 kg</p></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                : 
+                                    <h2>Venta por piza</h2>
+                            }
+
                             <Keypad currentNumber={currentNumber} setCurrentNumber={ (val) => { setCurrentNumber(val); setErrorMsj('') }} />
+
+
 
                             <ModalButtons>
                                     <Button type='button' className="bg-red" onClick={ () => { handleProductModalClose(); setCurrentNumber(''); setErrorMsj('') } }>Cancelar</Button>

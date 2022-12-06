@@ -603,6 +603,20 @@ app.get('/pedido/:order_id', (req, res) => {
     db.close();
 });
 
+
+// Ruta para obtener el detalle de un pedido
+app.get('/pedido-detalle/:order_id', (req, res) => {
+    let db = getDBConnection();
+
+    db.all('SELECT * FROM Pedidos WHERE id = ?',[req.params.order_id] , (err, rows) => {
+        if(err){
+            res.json(returnError('Error in DB Query'));
+        }
+        // console.log(rows);
+        res.json(rows);
+    });
+    db.close();
+});
 // Nuevo pedido
 
 // Estados de pedidos
@@ -771,40 +785,40 @@ app.post('/pagar-pedido', jsonParser, (req, res) => {
         }
         else{
             
-            // Selecciona los datos del pedido creado
-            db.all('SELECT * FROM Pedidos WHERE id = ?', [req.body.order_id], function(err, rows){
-                // if (err) {
-                //     err = true;
-                //     return console.log(err.message);
-                // }
+            // // Selecciona los datos del pedido creado
+            // db.all('SELECT * FROM Pedidos WHERE id = ?', [req.body.order_id], function(err, rows){
+            //     // if (err) {
+            //     //     err = true;
+            //     //     return console.log(err.message);
+            //     // }
 
-                // Llama a la funcion obtenerAdeudo para generar
-                // la informacion que se imprimira en el ticket
-                obtenerAdeudo(function(adeudo){
-                    let order_data = rows[0];
-                    let final_ticket_data = {
-                        id_pedido: order_data.id,
-                        fecha: order_data.fecha,
-                        cajero: req.body.cajero_id, //req.body.cajero,
-                        chalan: order_data.chalan ? order_data.chalan.split(',')[0] : 'NA',
-                        cliente: order_data.id_cliente,
-                        adeudo: adeudo,
-                        estado_nota: getOrderStatusText(order_data.estado), 
-                        efectivo: order_data.efectivo,
-                        productos: req.body.items.map( function(item){ 
-                            return {
-                                nombre_producto: item.nombre_producto,
-                                precio_kg: item.precio_kg,
-                                cantidad_kg: item.cantidad_kg
-                            }
-                        })
-                    }
-                    console.log('******************************** Data del ticket', final_ticket_data);
+            //     // Llama a la funcion obtenerAdeudo para generar
+            //     // la informacion que se imprimira en el ticket
+            //     obtenerAdeudo(function(adeudo){
+            //         let order_data = rows[0];
+            //         let final_ticket_data = {
+            //             id_pedido: order_data.id,
+            //             fecha: order_data.fecha,
+            //             cajero: req.body.cajero_id, //req.body.cajero,
+            //             chalan: order_data.chalan ? order_data.chalan.split(',')[0] : 'NA',
+            //             cliente: order_data.id_cliente,
+            //             adeudo: adeudo,
+            //             estado_nota: getOrderStatusText(order_data.estado), 
+            //             efectivo: order_data.efectivo,
+            //             productos: req.body.items.map( function(item){ 
+            //                 return {
+            //                     nombre_producto: item.nombre_producto,
+            //                     precio_kg: item.precio_kg,
+            //                     cantidad_kg: item.cantidad_kg
+            //                 }
+            //             })
+            //         }
+            //         console.log('******************************** Data del ticket', final_ticket_data);
 
-                    // Imprime ticket
-                    generateTicket(final_ticket_data);
-            }, rows[0].id_cliente);
-            });
+            //         // Imprime ticket
+            //         generateTicket(final_ticket_data);
+            // }, rows[0].id_cliente);
+            // });
         }
 
         db.close();
@@ -1243,13 +1257,13 @@ function getFullDateTime(){
     let year = date_ob.getFullYear();
 
     // current hours
-    let hours = date_ob.getHours();
+    let hours = ("0" + date_ob.getHours() ).slice(-2);
 
     // current minutes
-    let minutes = date_ob.getMinutes();
+    let minutes = ("0" + date_ob.getMinutes() ).slice(-2);
 
     // current seconds
-    let seconds = date_ob.getSeconds();
+    let seconds = ("0"+  date_ob.getSeconds()).slice(-2);
 
     return year + "-" + month + "-" + date + " " + hours + ":" + minutes; //+ ":" + seconds;
 }

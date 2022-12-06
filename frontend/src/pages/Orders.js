@@ -207,12 +207,12 @@ export default function Pedidos(){
     };
 
     const payOrder = async order => {
-        let items = await getOrderDetail(order.id);
+        console.log(order);
+
         let data = {
             total: order.total_pagar,
             order_id: order.id,
-            cajero: localStorage.getItem('sp_user_id'),
-            items
+            cajero: localStorage.getItem('username'),
         };
 
         console.log(data);
@@ -220,6 +220,15 @@ export default function Pedidos(){
 
         try {
             let res = await SP_API('http://localhost:3002/pagar-pedido', 'POST', data); 
+            console.log(res);
+
+            let nuevo_pedido_detalle = await SP_API('http://localhost:3002/pedido-detalle/' + order.id, 'GET', );
+            if(nuevo_pedido_detalle.length === 1){
+                console.log(nuevo_pedido_detalle);
+
+                await printTicket(nuevo_pedido_detalle[0]);
+            }
+
                     
             if(res.error === false){
                 initialFunction();
@@ -246,6 +255,12 @@ export default function Pedidos(){
             }
     
             let res = await SP_API('http://localhost:3002/pce-pedido', 'POST', order); 
+
+            let nuevo_pedido_detalle = await SP_API('http://localhost:3002/pedido-detalle/' + order.order_id, 'GET', );
+            if(nuevo_pedido_detalle.length === 1){
+                console.log(nuevo_pedido_detalle);
+                await printTicket(nuevo_pedido_detalle[0]);
+            }
     
             console.log(res);
             if(res.error === false){
@@ -279,6 +294,13 @@ export default function Pedidos(){
         }
 
         let res = await SP_API('http://localhost:3002/fiar-pedido', 'POST', order); 
+
+        let nuevo_pedido_detalle = await SP_API('http://localhost:3002/pedido-detalle/' + order.order_id, 'GET', );
+        if(nuevo_pedido_detalle.length === 1){
+            console.log(nuevo_pedido_detalle);
+            await printTicket(nuevo_pedido_detalle[0]);
+            debugger;
+        }
 
         console.log(res);
         if(res.error === false){
@@ -334,6 +356,7 @@ export default function Pedidos(){
 
     
         let res = await SP_API('http://localhost:3002/imprimir-ticket', 'POST', final_ticket_data);
+        console.log(res);
         alert('Ticket impreso');
     };
 
@@ -347,7 +370,7 @@ export default function Pedidos(){
 
         <p style={ {fontSize: 24} }>Confirma que recibio la cantidad de <strong style={ {fontSize: 24} }>${order.total_pagar}</strong> por parte de <strong style={ {fontSize: 24} }>{ order.chalan.split(',')[1]}</strong></p>
 
-        <form className="modal-form" onSubmit={  () => payOrder(order) }>
+        <form className="modal-form" onSubmit={  (event) => { event.preventDefault(); payOrder(order) } }>
             <div className="modal-buttons">
                 <Button className="bg-primary" type='submit'>Cobrar</Button>
                 <Button className="bg-red" onClick={ handleModalClose }>Cancelar</Button>
