@@ -768,6 +768,27 @@ app.post('/nuevo-pedido', jsonParser, async (req, res) => {
     });
 });
 
+
+app.post('/abono-nota', jsonParser, (req, res) => {
+    console.log('pagando pedido');
+    let query = `INSERT INTO Abonos_notas VALUES(null, ?, ?, ?, ?, ?, ?)`;
+    let values = [req.body.id_pedido, req.body.adeudo, req.body.abonado, getCurrentDatetime(), req.body.estado, req.body.chalan];
+
+    let db = getDBConnection();
+    let error = false;
+
+    db.run(query, values, function(err) {
+        if (err) {
+            error = true;
+            console.log(err.message);
+            // return console.log(err.message);
+        }
+
+        db.close();
+        res.json({error});
+    });
+});
+
 // Ruta para pagar un pedido
 app.post('/pagar-pedido', jsonParser, (req, res) => {  
     console.log('pagando pedido');

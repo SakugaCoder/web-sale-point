@@ -59,8 +59,8 @@ const Detail = styled.div`
 `;
 
 const ContraEntrega = styled.div`
-    display: 'block';
-    margin: 'auto';
+    display: block;
+    margin: auto;
 
     h2{
         text-align: center;
@@ -352,8 +352,6 @@ export default function Pedidos(){
         };
 
         console.log(final_ticket_data);
-        
-
     
         let res = await SP_API('http://localhost:3002/imprimir-ticket', 'POST', final_ticket_data);
         console.log(res);
@@ -501,6 +499,45 @@ export default function Pedidos(){
         }
     }
 
+    const abonar = async (evt, order) => {
+        evt.preventDefault();
+
+        
+        let data = {
+            id_pedido: order.id,
+            adeudo: order.adeudo,
+            abonado: evt.target.abono.value,
+            estado: 0,
+            chalan: null
+        };
+
+
+        if(evt.target.contra_entrega.value !== '0'){
+            console.log('Contra entrega')
+            data.estado = 1;
+            data.chalan = evt.target.contra_entrega.value;
+        }
+
+        console.log(data)
+
+
+        try {
+            let res = await SP_API('http://localhost:3002/abono-nota', 'POST', data); 
+                    
+            if(res.error === false){
+                // initialFunction();
+                window.location.reload();
+            }
+
+            else{
+                alert('Error al pagar PCE chalan');
+            }   
+        } catch (error) {
+            console.log(error);
+        }
+    }
+    
+
     return(
         <Layout active='Notas'>
             <Container>
@@ -539,6 +576,9 @@ export default function Pedidos(){
                                     </select>
                                 </td>
                                 <td>Acciones</td>
+                                <td>Abonado</td>
+                                <td>Restante</td>
+                                <td>APC</td>
                             </tr>
                         </thead>
                         
@@ -555,7 +595,7 @@ export default function Pedidos(){
                         <ActionButton className="bg-primary" medium onClick={ () => openDetailModal(item) }>Detalle</ActionButton>
                         <ActionButton className="bg-light-blue" ml medium onClick={ () => printTicket(item) }>Ticket</ActionButton>
                         { estadoCaja.caja ?
-                        <>{ estadoCaja.caja.estado === 'abierta' ? (item.estado === 2 || item.estado === 3 ? <ActionButton className="bg-blue" medium ml onClick={ () => { setPaymentModalState({visible: true}); setCurrentOrder(item)  } }>Cobrar</ActionButton> : (item.estado === 4 ? <><ActionButton className="bg-blue" onClick={ () => openEditModal(item) } medium ml>Recibir pago</ActionButton> { item.id_cliente !== 0 ? <ActionButton className="bg-red"  onClick={ () => openFiarModal(item) } medium ml>Fiar </ActionButton> :null }</>: null)) : null}</>
+                        <>{ estadoCaja.caja.estado === 'abierta' ? (item.estado === 2 || item.estado === 3 ? <ActionButton className="bg-blue" medium ml onClick={ () => { setPaymentModalState({visible: true}); setCurrentOrder(item)  } }>Recibir abono</ActionButton> : (item.estado === 4 ? <><ActionButton className="bg-blue" onClick={ () => openEditModal(item) } medium ml>Recibir pago</ActionButton> { item.id_cliente !== 0 ? <ActionButton className="bg-red"  onClick={ () => openFiarModal(item) } medium ml>Fiar </ActionButton> :null }</>: null)) : null}</>
                         : null }
 
                     </div></td>
@@ -573,14 +613,13 @@ export default function Pedidos(){
 
             {/* Payment Modal */}
             <Modal title='Payment modal' visible={ paymentModalState.visible }  handleModalClose={ () => { handlePaymentModalClose(); setCurrentNumber(''); } } >
-                <ModalForm onSubmit={ event => payOrderPCE(event) }>
-                    <Total>Total a pagar: <strong>$ { currentOrder ? currentOrder.total_pagar : 0} </strong></Total>
+                <ModalForm onSubmit={ event => abonar(event, currentOrder) }>
+                    <Total>Total adeudo: <strong>$ { currentOrder ? currentOrder.aduedo : 0} </strong></Total>
                     <Change>Cambio: <strong> $ { currentOrder ? ((Number(currentNumber) - currentOrder.total_pagar ) > 0 ? (Number(currentNumber) - currentOrder.total_pagar ) : 0).toFixed(2) : 0} </strong></Change>
                     <PaymentAmount>${ currentNumber ? currentNumber : '0'}</PaymentAmount>
                     <p style={ {fontSize: 26, color: 'red', textAlign: 'center'} }>{ errorMsj } </p>
-                    <input type='hidden' value={currentNumber ? currentNumber : '0'} name='pago'/>
-                    <input type='hidden' name='order_id' value={currentOrder ? currentOrder.id : null} />
-                    <input type='hidden' name='total_pagar' value={currentOrder ? currentOrder.total_pagar : null} />
+                    <input type='hidden' value={currentNumber ? currentNumber : '0'} name='abono'/>
+
                     <ContraEntrega>
                         { /* <h3 style={{ textAlign: 'center', fontSize: 20}}>Contra engrega <input type='checkbox' style={ {padding: '10px'} } onChange={ (event) => setContraEntrega(event.target.checked) } /></h3> */}
                         <h2>Contra entrega</h2>
@@ -596,6 +635,32 @@ export default function Pedidos(){
                     </ModalButtons>
                 </ModalForm>
             </Modal>
+
+                {/* Payment Modal (before adding recibe credit funcionality )
+                        <Modal title='Payment modal' visible={ paymentModalState.visible }  handleModalClose={ () => { handlePaymentModalClose(); setCurrentNumber(''); } } >
+                <ModalForm onSubmit={ event => payOrderPCE(event) }>
+                    <Total>Total a pagar: <strong>$ { currentOrder ? currentOrder.total_pagar : 0} </strong></Total>
+                    <Change>Cambio: <strong> $ { currentOrder ? ((Number(currentNumber) - currentOrder.total_pagar ) > 0 ? (Number(currentNumber) - currentOrder.total_pagar ) : 0).toFixed(2) : 0} </strong></Change>
+                    <PaymentAmount>${ currentNumber ? currentNumber : '0'}</PaymentAmount>
+                    <p style={ {fontSize: 26, color: 'red', textAlign: 'center'} }>{ errorMsj } </p>
+                    <input type='hidden' value={currentNumber ? currentNumber : '0'} name='pago'/>
+                    <input type='hidden' name='order_id' value={currentOrder ? currentOrder.id : null} />
+                    <input type='hidden' name='total_pagar' value={currentOrder ? currentOrder.total_pagar : null} />
+                    <ContraEntrega>
+                        <h2>Contra entrega</h2>
+                        { chalanesSelect }
+                    </ContraEntrega>
+
+                    <Keypad currentNumber={currentNumber} setCurrentNumber={setCurrentNumber} />
+
+                    
+                    <ModalButtons>
+                        <Button type="submit" className="bg-primary">Pagar</Button>
+                        <Button type="button" className="bg-red" onClick={ () => { handlePaymentModalClose(); setCurrentNumber(''); } }>Cancelar</Button>
+                    </ModalButtons>
+                </ModalForm>
+            </Modal>
+            */}
 
             <style>
                 {`

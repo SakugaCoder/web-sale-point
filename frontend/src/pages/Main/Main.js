@@ -220,8 +220,8 @@ const PaymentAmount = styled.p`
 `;
 
 const ContraEntrega = styled.div`
-    display: 'block';
-    margin: 'auto';
+    display: none;
+    margin: auto;
 
     h2{
         text-align: center;
@@ -258,18 +258,15 @@ export default function Main(){
     const [ paymentError, setPaymentError ]  = useState('');
     const [ errorBascula, setErrorBascula ] = useState(null);
     const [ errorMsj, setErrorMsj ] = useState('');
-    const [ inputs, setInputs ] = useState({
-        pza:{
-            cantidad: useRef(null),
-            precio: useRef(null)
-        },
-        kg:{
-            precio: 0,
-            tara: 0,
-        }
-    });
+    
+    const [ kgPrice, setKgPrice ] = useState('');
+    const [ kgWeight, setKgWeight ] = useState('');
+    const [ kgTara, setKgTara ] = useState('');
 
-    const [ currentInput, setCurrentInput ] = useState('');
+    const [ pzaPrice, setPzaPrice ] = useState('');
+    const [ pzaQty, setPzaQty ] = useState('');
+
+    const [ currentInputState, setCurrentInputState ] = useState([]);
 
     let counter = 0;
 
@@ -426,6 +423,7 @@ export default function Main(){
                         cajero_id: localStorage.getItem('sp_user_id'),
                         date:  (new Date().toISOString().split(':')[0]).split('T')[0]
                     }
+
         
                     let res = await insertItem('pedido', order);
                     if(res.err === false){
@@ -478,14 +476,32 @@ export default function Main(){
         if(kg > 0){
             item_data.kg = kg;
         }
-
         else{
-            setErrorMsj('Error. Favor de introducir una cantidad valida.');
-            // item_data.kg = currentNumber;
-            return null;
+            item_data.kg = currentKg;
         }
 
+        if(item_data.venta_por === 'kg'){
+            if(kgPrice && kgPrice !== '0'){
+                item_data.price = Number(kgPrice);
+            }
+        }
+
+        else{
+            if(pzaPrice && pzaPrice !== '0'){
+                item_data.price = Number(pzaPrice);
+            }
+        }
+
+
+
+        // else{
+        //     setErrorMsj('Error. Favor de introducir una cantidad valida.');
+        //     // item_data.kg = currentNumber;
+        //     return null;
+        // }
+
         console.log(item_data.kg);
+        console.log(item_data);
         let item_exists = basket.find( basket_item => basket_item.id === item_data.id);
         if(item_exists){
             let new_basket = basket.map(basket_item => {
@@ -507,6 +523,7 @@ export default function Main(){
         
         handleProductModalClose();
         setCurrentNumber('');
+        clearProductModal();
         evt.target.reset();
         return null;
     };
@@ -645,10 +662,79 @@ export default function Main(){
     </div>
     };
 
-    const addValueToInput = val => {
-        setInputs(
-            ...inputs,
-        )
+    const addValueToInput = (val, bs) => {
+        console.log(currentInputState);
+        let new_number = val[val.length -1 ];
+
+        
+        if(currentInputState === 'kgPrice'){
+            if(bs)
+                setKgPrice(kgPrice.substring(0, kgPrice.length - 1));
+            else
+                setKgPrice(kgPrice + new_number);
+        }
+
+        if(currentInputState === 'kgWeight'){
+            if(bs)
+                setKgWeight(kgWeight.substring(0, kgPrice.length - 1));
+            else
+                setKgWeight(kgWeight + new_number);
+        }
+
+        if(currentInputState === 'tara'){
+            if(bs)
+                setKgTara(kgTara.substring(0, kgTara.length - 1));
+            else
+                setKgTara(kgTara + new_number);
+        }
+
+        if(currentInputState === 'pzaPrice'){
+            if(bs)
+                setPzaPrice(pzaPrice.substring(0, pzaPrice.length - 1));
+            else
+                setPzaPrice(pzaPrice + new_number);
+        }
+
+        if(currentInputState === 'pzaQty'){
+            if(bs)
+                setPzaQty(pzaQty.substring(0, pzaQty.length - 1));
+            else
+                setPzaQty(pzaQty + new_number);
+        }
+    }
+
+    const getNetWeight = () =>{
+        let final_weight = currentKg;
+        let tara = 0;
+        if(kgWeight && kgWeight !== '0')
+            final_weight = kgWeight;
+
+        if(kgTara && kgTara !== '0')
+            tara = kgTara; 
+        
+        return roundNumber( Number(final_weight) - Number(tara));
+    }
+
+    const getTotalCost = product_price => {
+        let net_weight = getNetWeight();
+
+        if(kgPrice && kgPrice !== '0')
+            return  Number(net_weight) * Number(kgPrice);
+
+        return roundNumber(Number(net_weight) * Number(product_price));
+    }
+
+    const getTotalCostPza = () => {
+
+    }
+
+
+    const clearProductModal = () =>{
+        setKgPrice('');
+        setKgWeight('');
+        setKgTara('');
+        setPzaPrice('');
+        setPzaQty('');
     }
     
     useEffect( () => {
@@ -658,6 +744,7 @@ export default function Main(){
         getCashRegister();
         setKgInterval(setInterval(getCurrentKg, 900));
     }, []);
+
 
     return(
         <Layout active='Inicio'>
@@ -729,12 +816,12 @@ export default function Main(){
 
                     <div>{paymentError ? <p style={ {fontSize: 24, color: 'red', textAlign: 'center'} }>{paymentError}</p> : null}</div>
                     <ContraEntrega>
-                        { /* <h3 style={{ textAlign: 'center', fontSize: 20}}>Contra engrega <input type='checkbox' style={ {padding: '10px'} } onChange={ (event) => setContraEntrega(event.target.checked) } /></h3> */}
+
                         <h2>Pago contra entrega</h2>
                         { chalanesSelect }
                     </ContraEntrega>
 
-                    <Keypad currentNumber={currentNumber} setCurrentNumber= { (val) => {setCurrentNumber(val); addValueToInput(val); setPaymentError('') }} />
+                    <Keypad currentNumber={currentNumber} setCurrentNumber= { (val) => {setCurrentNumber(val);  setPaymentError('') }} />
                     
                     <ModalButtons>
                         <Button type="submit" className="bg-primary">Pagar</Button>
@@ -756,7 +843,7 @@ export default function Main(){
 
                         <ModalForm onSubmit={ event => { addProductToBasket(event, currentProduct); }}>
                             { /* <Input placeholder='Cantidad en kg' label='Cantidad en kilogramos' name='kg' required/> */}
-                            <input type='hidden' value={ currentNumber } name='kg'/>
+                            {/* <input type='hidden' value={ currentNumber } name='kg'/> */}
                             {/* 
                                 <PaymentAmount>En bascula: { currentKg } kg</PaymentAmount>
                                 <PaymentAmount>Peso total: { finalKg } kg</PaymentAmount>
@@ -771,40 +858,57 @@ export default function Main(){
                                         <tbody>
                                             <tr>
                                                 <td><h3>Precio x {currentProduct.venta_por}</h3></td>
-                                                <td><input type='text' placeholder={currentProduct.price}></input></td>
+                                                <td><input type='text' placeholder={currentProduct.price} value={kgPrice} defaultValue={currentProduct.precio} onFocus={ () => setCurrentInputState('kgPrice') }></input></td>
                                             </tr>
 
                                             <tr>
-                                                <td><h3>Precio bruto</h3></td>
-                                                <td><input type='text' placeholder={currentProduct.price}></input></td>
+                                                <td><h3>Peso bruto</h3></td>
+                                                <td><input type='text' placeholder={currentKg} name='kg' value={kgWeight} onFocus={ () => setCurrentInputState('kgWeight') }></input></td>
                                             </tr>
 
                                             <tr>
                                                 <td><h3>Tara</h3></td>
-                                                <td><input type='text' placeholder={currentProduct.price}></input></td>
+                                                <td><input type='text' placeholder={'0'} value={kgTara} onFocus={ () => setCurrentInputState('tara') }></input></td>
                                             </tr>
 
                                             <tr>
                                                 <td><h3>Peso neto</h3></td>
-                                                <td><p>2.3 kg</p></td>
+                                                <td><p>{ getNetWeight() } kg</p></td>
                                             </tr>
 
                                             <tr>
                                                 <td><h3>Total</h3></td>
-                                                <td><p>2.3 kg</p></td>
+                                                <td><p>$ { getTotalCost(currentProduct.price) } </p></td>
                                             </tr>
                                         </tbody>
                                     </table>
                                 : 
-                                    <h2>Venta por piza</h2>
+                                    <table className="product-info">
+                                    <tbody>
+                                        <tr>
+                                            <td><h3>Precio x {currentProduct.venta_por}</h3></td>
+                                            <td><input type='text'  placeholder={currentProduct.price} value={pzaPrice} defaultValue={currentProduct.precio} onFocus={ () => setCurrentInputState('pzaPrice') }></input></td>
+                                        </tr>
+
+                                        <tr>
+                                            <td><h3>Piezas</h3></td>
+                                            <td><input type='text' name={'kg'} value={pzaQty} defaultValue={1} onFocus={ () => setCurrentInputState('pzaQty') }></input></td>
+                                        </tr>
+
+                                        <tr>
+                                            <td><h3>Total</h3></td>
+                                            <td><p>$ { getTotalCostPza(currentProduct.price) } </p></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             }
 
-                            <Keypad currentNumber={currentNumber} setCurrentNumber={ (val) => { setCurrentNumber(val); setErrorMsj('') }} />
+                            <Keypad currentNumber={currentNumber} setCurrentNumber={ (val, backspace) => { setCurrentNumber(val); addValueToInput(val, backspace); setErrorMsj('') }} />
 
 
 
                             <ModalButtons>
-                                    <Button type='button' className="bg-red" onClick={ () => { handleProductModalClose(); setCurrentNumber(''); setErrorMsj('') } }>Cancelar</Button>
+                                    <Button type='button' className="bg-red" onClick={ () => { handleProductModalClose(); setCurrentNumber(''); setErrorMsj(''); clearProductModal(); } }>Cancelar</Button>
                                     {/* <Button className="bg-blue ml" type='button' onClick={ () => { setFinalKg(finalKg+currentKg)} }>Agregar peso</Button> */}
                                     <Button type='submit' className="ml bg-primary">Guardar</Button>
                             </ModalButtons>

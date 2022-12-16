@@ -57,7 +57,7 @@ export default function Keypad(props){
     
             else if(char === '<-'){
                 if(props.currentNumber.length >= 1){
-                    props.setCurrentNumber( props.currentNumber.substring(0, props.currentNumber.length - 1));
+                    props.setCurrentNumber( props.currentNumber.substring(0, props.currentNumber.length - 1), true);
                 }
             }
         }
