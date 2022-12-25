@@ -32,7 +32,7 @@ export default function Keypad(props){
     const keyPadItems= ['1', '2', '3', '4', '5', '6', '7', '8', '9', '<-', '0', '.'];
 
     const onClickKeyPadItem = char =>{
-        console.log(char);
+        console.log(char, props.currentNumber);
         if(char === '.'){
             if(!props.currentNumber.includes('.')){
                 props.setCurrentNumber(props.currentNumber + char);
@@ -56,7 +56,9 @@ export default function Keypad(props){
             }
     
             else if(char === '<-'){
+                console.log('Hey llegamos aqui')
                 if(props.currentNumber.length >= 1){
+                    console.log('si es correcto');
                     props.setCurrentNumber( props.currentNumber.substring(0, props.currentNumber.length - 1), true);
                 }
             }

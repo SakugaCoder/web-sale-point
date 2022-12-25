@@ -137,7 +137,17 @@ const ActionButton = styled.button`
         background-color: white;
         border-color: #000;
     }
+`;
 
+const FechaInput = styled.input`
+    border: solid 2px #000;
+    padding: 10px;
+    border-radius: 20px;
+    width: 100%;
+    font-size: 26px;
+    max-width: 300px;
+    display: block;
+    margin: auto;
 `;
 
 const getOrderStatusLabel = status_id => {
@@ -173,10 +183,13 @@ export default function Pedidos(){
     const [filters, setFilters] = useState({fecha: null, cliente: null, chalan: '', estado: null});
     const { modalState, setModalState, handleModalClose } = useModal();
     const { modalState: paymentModalState, setModalState: setPaymentModalState, handleModalClose: handlePaymentModalClose } = useModal();
+    const { modalState: APCModalState, setModalState: setAPCModalState, handleModalClose: handleAPCModalClose } = useModal();
+
     const [ currentNumber, setCurrentNumber ] = useState('');
     const [ currentOrder, setCurrentOrder] = useState(null);
     const [ errorMsj, setErrorMsj ] = useState('');
     const [ estadoCaja, setEstadoCaja ] = useState(null);
+    const [ currentDate, setCurrentDate ] = useState('');
     const [ clientDebt, setClientDebt ] = useState();
 
     const initialFunction = async () => {
@@ -184,15 +197,29 @@ export default function Pedidos(){
         let res_chalanes = await getItems('chalanes');
         let res_clientes = await getItems('clientes');
         let res_caja = await getItems('estado-caja');
-
-        console.log(res_caja);
+        let res_date = await SP_API('http://localhost:3002/date', 'GET');
+        
+        // console.log(res_caja);
 
         setEstadoCaja(res_caja);
         setChalanes(res_chalanes);
-        setTableData(res);
-        setOrders(res); 
         setClients(res_clientes);
+        setCurrentDate(res_date);
+        obtenerAdeudos(res);
     };
+
+    const obtenerAdeudos = async notas =>{
+        for(let nota of notas){
+            if(nota.estado === 2){
+                let abonos = await obtenerAbonos(nota.id);
+                nota.abonos = abonos;
+                // console.log(abonos);
+            }
+        };
+        console.log(notas);
+        setTableData(notas);
+        setOrders(notas) 
+    }
     
     const openEditModal = product_data => {
         setModalState({visible: true, content: editModal(product_data)});
@@ -345,7 +372,7 @@ export default function Pedidos(){
             chalan: ticket_order.chalan ? ticket_order.chalan.split(',')[0] : 'NA',
             cliente: ticket_order.id_cliente,
             // adeudo: ticket_order.adeudo,// ticket_order.adeudo,
-            adeudo: adeudo_res.adeudo,
+            adeudo: Number(adeudo_res.adeudo) - Number(adeudo_res.abonado),
             estado_nota: getOrderStatusText(ticket_order.estado),
             efectivo: null,
             productos: ticket_order.detalle
@@ -431,7 +458,7 @@ export default function Pedidos(){
             let res = await SP_API('http://localhost:3002/deuda-usuario/'+id_cliente, 'GET');
             console.log(res)
             if(res){
-                setClientDebt(roundNumber(res[0].deuda_cliente));
+                setClientDebt(roundNumber( Number(res[0].deuda_cliente) -  Number(res[1].total_abonado) ));
             }
         }
         else{
@@ -501,42 +528,114 @@ export default function Pedidos(){
 
     const abonar = async (evt, order) => {
         evt.preventDefault();
+        setErrorMsj('');
 
-        
-        let data = {
-            id_pedido: order.id,
-            adeudo: order.adeudo,
-            abonado: evt.target.abono.value,
-            estado: 0,
-            chalan: null
-        };
-
-
-        if(evt.target.contra_entrega.value !== '0'){
-            console.log('Contra entrega')
-            data.estado = 1;
-            data.chalan = evt.target.contra_entrega.value;
+        if(Number(evt.target.abono.value) > 0){
+            let data = {
+                id_pedido: order.id,
+                id_cliente: order.id_cliente,
+                adeudo: order.adeudo,
+                abonado: evt.target.abono.value,
+                estado: 0,
+                chalan: null,
+                fecha: evt.target.fecha.value,
+                restante: evt.target.restante.value
+            };
+    
+            
+    
+            if(evt.target.contra_entrega.value !== '0'){
+                console.log('Contra entrega')
+                data.estado = 1;
+                data.chalan = evt.target.contra_entrega.value;
+            }
+    
+            console.log(data)
+    
+            try {
+                let res = await SP_API('http://localhost:3002/abono-nota', 'POST', data); 
+                        
+                if(res.error === false){
+                    // initialFunction();
+                    window.location.reload();
+                }
+    
+                else{
+                    alert('Error al pagar PCE chalan');
+                }   
+            } catch (error) {
+                console.log(error);
+            }
         }
 
-        console.log(data)
+        else{
+            setErrorMsj('Error. Favor de ingresar una cantidad correcta.');
+        }
+    }
 
+    const pagarAbono = async (evt, nota) => {
+        evt.preventDefault();
+        let pago_abono = evt.target.pago_abono.value;
+        let id_abono = evt.target.id_abono.value;
+        console.log(pago_abono);
 
+        setErrorMsj('');
+
+        if(Number(evt.target.pago_abono.value) > 0){
+            let data = {
+                id_abono,
+                abonado: pago_abono,
+                restante: evt.target.restante.value,
+                id_pedido: nota.id
+            };
+    
+            console.log(data);
+            try {
+                let res = await SP_API('http://localhost:3002/pagar-abono-nota', 'POST', data); 
+                        
+                if(res.error === false){
+                    // initialFunction();
+                    window.location.reload();
+                }
+    
+                else{
+                    alert('Error al pagar PCE chalan');
+                }   
+            } catch (error) {
+                console.log(error);
+            }
+        }
+
+        else{
+            setErrorMsj('Error. Favor de ingresar una cantidad correcta.');
+        }
+    }
+
+    const obtenerAbonos = async order_id => {
         try {
-            let res = await SP_API('http://localhost:3002/abono-nota', 'POST', data); 
+            let res = await SP_API('http://localhost:3002/abonos-nota/'+order_id, 'GET'); 
+            // console.log(res);
                     
             if(res.error === false){
                 // initialFunction();
-                window.location.reload();
+                // console.log(res);
+                return res;
             }
 
             else{
                 alert('Error al pagar PCE chalan');
+                return null;
             }   
         } catch (error) {
             console.log(error);
+            return null;
         }
-    }
-    
+    };
+
+    const getAPCButtons = (abonos, nota) => {
+        let apc_buttons = (abonos.filter(abono => abono.estado === 1)).map( abono => <ActionButton style={ {minWidth: '50px'} } className="bg-red" medium onClick={ () => { setAPCModalState({...APCModalState, visible: true, id_abono: abono.id}); setCurrentOrder(nota); setCurrentNumber(''+abono.abonado) }}>${abono.abonado}</ActionButton>);
+        return <div style={ {display: 'flex', justifyContent: 'space-between'} }>{ apc_buttons} </div>;
+    };
 
     return(
         <Layout active='Notas'>
@@ -589,16 +688,20 @@ export default function Pedidos(){
                                         <td>{ item.fecha }</td>
                                         <td>{ item.id_cliente } - { item.nombre_cliente }</td>
                                         <td><p> { item.chalan ? `${item.chalan.split(',')[0]} - ${item.chalan.split(',')[1]}` : null } </p> </td>
-                                        <td>{'$'+ item.total_pagar}</td>
+                                        <td>{'$'+ roundNumber(item.total_pagar) }</td>
                                         <td>{ getOrderStatusLabel(item) }</td>
-                                        <td><div style={ {display: 'flex', flexWrap: 'nowrap'} }>
-                        <ActionButton className="bg-primary" medium onClick={ () => openDetailModal(item) }>Detalle</ActionButton>
-                        <ActionButton className="bg-light-blue" ml medium onClick={ () => printTicket(item) }>Ticket</ActionButton>
-                        { estadoCaja.caja ?
-                        <>{ estadoCaja.caja.estado === 'abierta' ? (item.estado === 2 || item.estado === 3 ? <ActionButton className="bg-blue" medium ml onClick={ () => { setPaymentModalState({visible: true}); setCurrentOrder(item)  } }>Recibir abono</ActionButton> : (item.estado === 4 ? <><ActionButton className="bg-blue" onClick={ () => openEditModal(item) } medium ml>Recibir pago</ActionButton> { item.id_cliente !== 0 ? <ActionButton className="bg-red"  onClick={ () => openFiarModal(item) } medium ml>Fiar </ActionButton> :null }</>: null)) : null}</>
-                        : null }
-
-                    </div></td>
+                                        <td>
+                                            <div style={ {display: 'flex', flexWrap: 'nowrap'} }>
+                                                <ActionButton className="bg-primary" medium onClick={ () => openDetailModal(item) }>Detalle</ActionButton>
+                                                <ActionButton className="bg-light-blue" ml medium onClick={ () => printTicket(item) }>Ticket</ActionButton>
+                                                { estadoCaja.caja ?
+                                                <>{ estadoCaja.caja.estado === 'abierta' ? (item.estado === 2 || item.estado === 3 ? <> <ActionButton className="bg-blue" medium ml onClick={ () => { setPaymentModalState({visible: true}); setCurrentOrder(item); console.log(item.adeudo)  } }>Recibir abono</ActionButton> </> : (item.estado === 4 ? <><ActionButton className="bg-blue" onClick={ () => openEditModal(item) } medium ml>Recibir pago</ActionButton> { item.id_cliente !== 0 ? <ActionButton className="bg-red"  onClick={ () => openFiarModal(item) } medium ml>Fiar </ActionButton> :null }</>: null)) : null}</>
+                                                : null }
+                                            </div>
+                                        </td>
+                                        <td>{ item.abonos ? (item.abonos.total_abonado ? '$'+item.abonos.total_abonado : '$0') : null}</td>
+                                        <td>{ item.abonos ? (item.abonos.total_abonado ? item.adeudo - item.abonos.total_abonado: item.adeudo) : null}</td>
+                                        <td>{ item.abonos ? (item.abonos.detalle_abonos ? getAPCButtons(item.abonos.detalle_abonos, item) : null) : null} </td>
                                     </tr> 
                                 })
                             : null ) }
@@ -612,13 +715,15 @@ export default function Pedidos(){
             </Modal>
 
             {/* Payment Modal */}
-            <Modal title='Payment modal' visible={ paymentModalState.visible }  handleModalClose={ () => { handlePaymentModalClose(); setCurrentNumber(''); } } >
+            <Modal title='Payment modal' visible={ paymentModalState.visible }  handleModalClose={ () => { handlePaymentModalClose(); setCurrentNumber(''); setErrorMsj(''); } } >
                 <ModalForm onSubmit={ event => abonar(event, currentOrder) }>
-                    <Total>Total adeudo: <strong>$ { currentOrder ? currentOrder.aduedo : 0} </strong></Total>
-                    <Change>Cambio: <strong> $ { currentOrder ? ((Number(currentNumber) - currentOrder.total_pagar ) > 0 ? (Number(currentNumber) - currentOrder.total_pagar ) : 0).toFixed(2) : 0} </strong></Change>
+                    <FechaInput type={'date'} name='fecha' defaultValue={ currentDate ? currentDate.date : null }/>
+                    <Total>Total adeudo: <strong>$ {currentOrder ? (currentOrder.abonos ? (currentOrder.abonos.total_abonado ? currentOrder.adeudo - currentOrder.abonos.total_abonado : currentOrder.adeudo) : currentOrder.adeudo ) : 0} </strong></Total>
+                    <Change>Restante: <strong> $ {currentOrder ? (currentOrder.abonos ? (currentOrder.abonos.total_abonado ? (currentOrder.adeudo - currentOrder.abonos.total_abonado) - Number(currentNumber) : currentOrder.adeudo - Number(currentNumber) ) : currentOrder.adeudo - Number(currentNumber) ) : 0}</strong></Change>
                     <PaymentAmount>${ currentNumber ? currentNumber : '0'}</PaymentAmount>
                     <p style={ {fontSize: 26, color: 'red', textAlign: 'center'} }>{ errorMsj } </p>
                     <input type='hidden' value={currentNumber ? currentNumber : '0'} name='abono'/>
+                    <input type='hidden' value={currentOrder ? (currentOrder.abonos ? (currentOrder.abonos.total_abonado ? (currentOrder.adeudo - currentOrder.abonos.total_abonado) - Number(currentNumber) : currentOrder.adeudo - Number(currentNumber) ) : currentOrder.adeudo - Number(currentNumber) ) : 0} name='restante'/>
 
                     <ContraEntrega>
                         { /* <h3 style={{ textAlign: 'center', fontSize: 20}}>Contra engrega <input type='checkbox' style={ {padding: '10px'} } onChange={ (event) => setContraEntrega(event.target.checked) } /></h3> */}
@@ -631,7 +736,35 @@ export default function Pedidos(){
                     
                     <ModalButtons>
                         <Button type="submit" className="bg-primary">Pagar</Button>
-                        <Button type="button" className="bg-red" onClick={ () => { handlePaymentModalClose(); setCurrentNumber(''); } }>Cancelar</Button>
+                        <Button type="button" className="bg-red" onClick={ () => { handlePaymentModalClose(); setCurrentNumber(''); setErrorMsj(''); } }>Cancelar</Button>
+                    </ModalButtons>
+                </ModalForm>
+            </Modal>
+
+            {/* APC modal */}
+            <Modal title='APC modal' visible={ APCModalState.visible }  handleModalClose={ () => { handleAPCModalClose(); setCurrentNumber(''); setErrorMsj('');} } >
+                <ModalForm onSubmit={ event => pagarAbono(event, currentOrder) }>
+                    <Total>Deuda restante: <strong>$ { currentOrder ? ((currentOrder.abonos.total_abonado ? currentOrder.adeudo - currentOrder.abonos.total_abonado: currentOrder.adeudo) - (currentNumber ? currentNumber : 0)) : null} </strong></Total>
+                    <Total>Total de abono a pagar: <strong>$ { currentNumber ? currentNumber : '0'} </strong></Total>
+                    {/* <Change>Cambio: <strong> $ { currentOrder ? ((Number(currentNumber) - currentOrder.total_pagar ) > 0 ? (Number(currentNumber) - currentOrder.total_pagar ) : 0).toFixed(2) : 0} </strong></Change> */}
+                    <PaymentAmount>${ currentNumber ? currentNumber : '0'}</PaymentAmount>
+                    <p style={ {fontSize: 26, color: 'red', textAlign: 'center'} }>{ errorMsj } </p>
+                    <input type='hidden' name='pago_abono' value={currentNumber ? currentNumber : '0'} />
+                    <input type='hidden' name='id_abono' value={ APCModalState.id_abono } />
+                    <input type='hidden' name='restante' value={ currentOrder ? ((currentOrder.abonos.total_abonado ? currentOrder.adeudo - currentOrder.abonos.total_abonado: currentOrder.adeudo) - (currentNumber ? currentNumber : 0)) : null} />
+                    {/* <input type='hidden' name='deuda_restante' value={ currentOrder ? ((currentOrder.abonos.total_abonado ? currentOrder.adeudo - currentOrder.abonos.total_abonado: currentOrder.adeudo)) : null} /> */}
+
+                    <ContraEntrega style={ {display: 'none'} }>
+                        <h2>Contra entrega</h2>
+                        { chalanesSelect }
+                    </ContraEntrega>
+
+                    <Keypad currentNumber={currentNumber} setCurrentNumber={setCurrentNumber} />
+
+                    
+                    <ModalButtons>
+                        <Button type="submit" className="bg-primary">Pagar</Button>
+                        <Button type="button" className="bg-red" onClick={ () => { handleAPCModalClose(); setCurrentNumber(''); setErrorMsj('');} }>Cancelar</Button>
                     </ModalButtons>
                 </ModalForm>
             </Modal>

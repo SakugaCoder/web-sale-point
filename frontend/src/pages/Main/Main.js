@@ -366,7 +366,7 @@ export default function Main(){
                 // Get client debt
                 let res = await SP_API('http://localhost:3002/deuda-usuario/'+client_data[0], 'GET');
                 if(res){
-                    setCurrentDebt(roundNumber(res[0].deuda_cliente));
+                    setCurrentDebt(roundNumber(Number(res[0].deuda_cliente) - Number(res[1].total_abonado) ));
                 }
                 console.log(res);
                 setRestrictedMode(false);

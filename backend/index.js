@@ -206,10 +206,14 @@ function obtenerAdeudo(callback, id_usuario, id_pedido){
             callback(null);
             db.close();
             // throw(err);            
-            
         }
+
+
         if(rows.length > 0){
-            callback(roundNumber(rows[0].deuda_cliente));
+            obtenerTotalAbonado(null, function(total_abonado){
+                callback(roundNumber(rows[0].deuda_cliente), roundNumber(total_abonado));
+            }, id_usuario);
+            
         }
         else{
             callback(null);
@@ -255,9 +259,9 @@ app.post('/id-usuario/', jsonParser, async (req, res) => {
 
 // Ruta para obtener el aduedo de un usuario apartir del id
 app.get('/obtener-adeudo/:id_usuario', async (req, res) => {
-    obtenerAdeudo(function(adeudo){
-        console.log(adeudo);
-        res.json({adeudo})
+    obtenerAdeudo(function(adeudo, abonado){
+        console.log(adeudo, abonado);
+        res.json({adeudo, abonado});
     }, req.params.id_usuario, req.params.id_pedido);
 }); 
 
@@ -334,7 +338,12 @@ app.get('/deuda-usuario/:id_client', (req, res) => {
             db.close();
             // throw(err);            
         }
-        res.json(rows);
+        
+        obtenerTotalAbonado(null, function(abonado){
+            rows.push({total_abonado: abonado});
+            res.json(rows);    
+        }, req.params.id_client);
+        
     });
     db.close();
 });
@@ -723,15 +732,16 @@ app.post('/nuevo-pedido', jsonParser, async (req, res) => {
 
             // Llama a la funcion obtenerAdeudo para generar
             // la informacion que se imprimira en el ticket
-            obtenerAdeudo(function(adeudo){
+            obtenerAdeudo(function(adeudo, abonado){
                 let order_data = rows[0];
+                console.log(adeudo, abonado);
                 let final_ticket_data = {
                     id_pedido: order_data.id,
                     fecha: order_data.fecha,
                     cajero: req.body.cajero_id, //req.body.cajero,
                     chalan: order_data.chalan ? order_data.chalan.split(',')[0] : 'NA',
                     cliente: order_data.id_cliente,
-                    adeudo: adeudo,
+                    adeudo: Number(adeudo) - Number(abonado),
                     estado_nota: getOrderStatusText(order_data.estado), 
                     efectivo: order_data.efectivo,
                     productos: req.body.items.map( function(item){ 
@@ -771,11 +781,12 @@ app.post('/nuevo-pedido', jsonParser, async (req, res) => {
 
 app.post('/abono-nota', jsonParser, (req, res) => {
     console.log('pagando pedido');
-    let query = `INSERT INTO Abonos_notas VALUES(null, ?, ?, ?, ?, ?, ?)`;
-    let values = [req.body.id_pedido, req.body.adeudo, req.body.abonado, getCurrentDatetime(), req.body.estado, req.body.chalan];
+    let query = `INSERT INTO Abonos_notas VALUES(null, ?, ?, ?, ?, ?, ?, ?)`;
+    let values = [req.body.id_pedido, req.body.id_cliente, req.body.adeudo, req.body.abonado, req.body.fecha, req.body.estado, req.body.chalan];
 
     let db = getDBConnection();
     let error = false;
+    let error2 = false;
 
     db.run(query, values, function(err) {
         if (err) {
@@ -784,10 +795,114 @@ app.post('/abono-nota', jsonParser, (req, res) => {
             // return console.log(err.message);
         }
 
-        db.close();
-        res.json({error});
+        
+        if(Number(req.body.restante) === 0 && req.body.estado === 0){
+            console.log('Se pago el total de la nota');
+            db.run('UPDATE Pedidos set estado=1 WHERE id=?', [req.body.id_pedido], function(err2) {
+                if (err2) {
+                    error2 = true;
+                    console.log(err2.message);
+                    // return console.log(err.message);
+                }
+        
+                db.close();
+                res.json({error, error2});
+            });
+        }      
+        else{
+            db.close();
+            res.json({error});
+        }  
     });
 });
+
+app.get('/abonos-nota/:id_pedido', (req, res) => {
+    console.log('obteniedo detalles de abonos de pedido');
+    let id_pedido = req.params.id_pedido;
+    let query = `SELECT * FROM Abonos_notas WHERE id_pedido = ?`;
+    let values = [id_pedido];
+
+    let db = getDBConnection();
+    let error = false;
+
+    db.all(query, values, function(err, rows) {
+        if (err) {
+            error = true;
+            console.log(err.message);
+            // return console.log(err.message);
+        }
+        else{
+            db.close();
+            obtenerTotalAbonado(id_pedido, function(total_abonado){
+                res.json({error, detalle_abonos: rows, total_abonado});
+            });
+        }
+    });
+});
+
+app.post('/pagar-abono-nota', jsonParser, (req, res) => {
+    console.log('pagando abono nota');
+    let query = `UPDATE Abonos_notas SET abonado=?, estado=0, chalan='' WHERE id=?`;
+    let values = [req.body.abonado, req.body.id_abono];
+
+    let db = getDBConnection();
+    let error = false;
+    let error2 = false;
+
+    db.run(query, values, function(err) {
+        if (err) {
+            error = true;
+            console.log(err.message);
+            // return console.log(err.message);
+        }
+        
+        if(Number(req.body.restante) === 0){
+            console.log('Se pago el total de la nota');
+            db.run('UPDATE Pedidos set estado=1 WHERE id=?', [req.body.id_pedido], function(err2) {
+                if (err2) {
+                    error2 = true;
+                    console.log(err2.message);
+                    // return console.log(err.message);
+                }
+        
+                db.close();
+                res.json({error, error2});
+            });
+        }      
+        else{
+            db.close();
+            res.json({error});
+        }  
+    });
+});
+
+function obtenerTotalAbonado(id_pedido, callback, id_cliente){
+    let query = `SELECT SUM(abonado) as total_abonado FROM Abonos_notas WHERE id_pedido = ? AND estado = 0`;
+    let values = [id_pedido];
+    if(id_cliente){
+        query = `SELECT SUM(abonado) as total_abonado FROM Abonos_notas WHERE id_cliente = ? AND estado = 0`;
+        values = [id_cliente];
+    }
+    
+
+    let db = getDBConnection();
+    let error = false;
+
+    db.all(query, values, function(err, rows) {
+        db.close();
+        console.log(rows);
+        if (err) {
+            error = true;
+            console.log(err.message);
+            // return console.log(err.message);
+            callback(null);
+        }
+        
+        else{
+            callback(rows[0].total_abonado);
+        }
+    });
+}
 
 // Ruta para pagar un pedido
 app.post('/pagar-pedido', jsonParser, (req, res) => {  
