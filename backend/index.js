@@ -125,7 +125,8 @@ function insertItem(query, values){
     db.run(query, values, function(err) {
     if (err) {
         err = true;
-        return console.log(err.message);
+        console.log(err.message);
+        return err;
     }
     // get the last insert id
     console.log(`A row has been inserted with rowid ${this.lastID}`);
@@ -532,7 +533,7 @@ app.get('/compras', (req, res) => {
 
 // Ruta para crear una nueva compra
 app.post('/nuevo-compra', jsonParser, (req, res) => {
-    let query = `INSERT INTO Compras VALUES(null, ?, ?, ?, ?, ?)`;
+    let query = `INSERT INTO Compras VALUES(null, ?, ?, ?, ?, ?, ?)`;
     let date = req.body.date;
     if(req.body.supplier_id === 4){
         date = getCurrentDatetime();
@@ -540,15 +541,17 @@ app.post('/nuevo-compra', jsonParser, (req, res) => {
     let values = [req.body.product_id, req.body.kg, date, req.body.supplier_id, req.body.costo];
     let err = insertItem(query, values);
 
-    if(req.body.es_retiro){
-        let retiro_query = 'INSERT INTO Retiros VALUES(null, ?, ?, ?)';
-        let retiro_values = [date, req.body.costo, `${ req.body.detalle_producto.name } - ${ req.body.detalle_proveedor.nombre}`];
-        let retiro_err = insertItem(retiro_query, retiro_values);
-        res.json({err, retiro: retiro_err});
-    }
-    else{
-        res.json({err});
-    }
+    res.json({err});
+
+    // if(req.body.es_retiro){
+    //     let retiro_query = 'INSERT INTO Retiros VALUES(null, ?, ?, ?)';
+    //     let retiro_values = [date, req.body.costo, `${ req.body.detalle_producto.name } - ${ req.body.detalle_proveedor.nombre}`];
+    //     let retiro_err = insertItem(retiro_query, retiro_values);
+    //     res.json({err, retiro: retiro_err});
+    // }
+    // else{
+    //     res.json({err});
+    // }
 });
 
 /*
@@ -567,6 +570,59 @@ app.delete('/eliminar-compra/:shopping_id', (req, res) => {
     let err = deleteItem(query, params);
     res.json({err});
 });
+
+// Ruta para obtener los abonos de una compra
+app.get('/abonos-compra/:id_compra', (req, res) => {
+    console.log('obteniedo detalles de abonos de pedido');
+    let id_compra = req.params.id_compra;
+    let query = `SELECT * FROM Abonos_compras WHERE id_compra = ?`;
+    let values = [id_compra];
+
+    let db = getDBConnection();
+    let error = false;
+
+    db.all(query, values, function(err, rows) {
+        if (err) {
+            error = true;
+            console.log(err.message);
+            // return console.log(err.message);
+        }
+        else{
+            db.close();
+            obtenerTotalAbonadoCompra(id_compra, function(total_abonado_compra){
+                res.json({error, detalle_abonos_compras: rows, total_abonado_compra});
+            });
+        }
+    });
+});
+
+// Ruta para crear una nuevo abono de compra
+app.post('/nuevo-abono-compra', jsonParser, (req, res) => {
+    console.log('Abonando compra');
+    let query = `INSERT INTO Abonos_compras VALUES(null, ?, ?, ?) `;
+    
+
+    let values = [req.body.purchase_id, req.body.monto_abono, req.body.fecha];
+    let err = insertItem(query, values);
+
+    if(err === false){
+        generateTicketAbono(req.body);
+    }
+
+    let date = getCurrentDatetime();
+
+    if(req.body.es_retiro){
+        let retiro_query = 'INSERT INTO Retiros VALUES(null, ?, ?, ?)';
+        let retiro_values = [date, req.body.monto_abono, `Abono de la compra con id: ${req.body.purchase_id}`];
+        let retiro_err = insertItem(retiro_query, retiro_values);
+        res.json({err, retiro: retiro_err});
+    }
+    else{
+        res.json({err});
+    }
+});
+
+
 
 
 // Ruta para obtener todos las pedidos ordenados por id
@@ -904,6 +960,29 @@ function obtenerTotalAbonado(id_pedido, callback, id_cliente){
     });
 }
 
+function obtenerTotalAbonadoCompra(id_compra, callback, id_cliente){
+    let query = `SELECT SUM(monto_abono) as total_abonado_compra FROM Abonos_compras WHERE id_compra = ?`;
+    let values = [id_compra];
+    
+
+    let db = getDBConnection();
+    let error = false;
+
+    db.all(query, values, function(err, rows) {
+        db.close();
+        console.log(rows);
+        if (err) {
+            error = true;
+            console.log(err.message);
+            // return console.log(err.message);
+            callback(null);
+        }
+        
+        else{
+            callback(rows[0].total_abonado_compra);
+        }
+    });
+}
 // Ruta para pagar un pedido
 app.post('/pagar-pedido', jsonParser, (req, res) => {  
     console.log('pagando pedido');
@@ -1581,6 +1660,83 @@ function generateTicket(order){
     
     // Guarda el ticket
     doc.save("ticket.pdf");
+    console.log('Ticket nuevo generado!');
+    
+
+    // Ejecuta comando para imprimir el ticket generado
+    exec('PDFtoPrinter-OldVersion.exe ticket.pdf', (error, stdout, stderr) => {
+        if (error) {
+            console.log(`error: ${error.message}`);
+            return;
+        }
+        if (stderr) {
+            console.log(`stderr: ${stderr}`);
+            return;
+        }
+        console.log(`stdout: ${stdout}`);
+    });
+}
+
+// Funcion que genera ticket apartir del parametro abono
+// el cual contiene toda la informacion para la impresion
+// del ticket
+function generateTicketAbono(abono){
+    console.log('Generando ticket abono');
+
+    // Nombre del negocio
+    let nombre_negocio = 'Aguacates y papayas cynthia';
+    // Obtiene la hora y fecha actual
+    let dt = getFullDateTime();
+
+
+    
+    // Crea un objeto jsPDF para generar el ticket (pdf)
+    const doc = new jsPDF.jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [50, 290]
+    });
+    
+    // Varuable para cambiar el valor de y en el pdf
+    let current_y = 0;
+    
+    // Cambia el tamaño de la tipografia
+    doc.setFontSize(8);
+    
+    // Escribe el nombre del negocio y fecha-hora en el pdf
+    doc.text(nombre_negocio, 6, 2);
+    doc.text(dt, 13, 6);
+    
+    // Escribe la fecha de la nota en el pdf
+    doc.setFont("helvetica", "normal");
+    doc.text('Fecha de abono:', 6, 14);
+    doc.setFont("helvetica", "bold");
+    doc.text(abono.fecha, 28, 14);
+    
+    current_y = 24;
+
+    
+    // Escribe el estado de la nota en el pdf
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text('ABONO', 10, current_y);
+    
+    
+    current_y += 8;
+    
+    // Escribe el total en el PDF
+    doc.setFont("helvetica", "bold");
+    doc.text('$'+abono.monto_abono, 18, current_y);
+    
+    doc.setFontSize(8);
+    current_y += 10;
+    
+    // Escribe el mensaje de agradecimiento en el pdf
+    doc.setFont("helvetica", "bold");
+    doc.text('Gracias por su compra', 8, current_y);
+    
+    // Guarda el ticket
+    doc.save("ticket_abono.pdf");
     console.log('Ticket nuevo generado!');
     
 
